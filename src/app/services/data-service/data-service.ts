@@ -14,11 +14,12 @@ interface AccountSearchResult {
   idaccount: string;
   alias: string;
   cvu: string;
-  user: {
-    nombre: string;
-    apellido: string;
-    dni: string;
-  };
+  currency: 'ARS' | 'USD';
+  user: {
+    nombre: string;
+    apellido: string;
+    dni: string;
+  };
 }
 
 interface TaxCalculationResult {
@@ -195,11 +196,16 @@ export class DataService {
     }
   }
 
-  async realizarTransferencia(idDestino: string, monto: number): Promise<any> {
-    const accountId = localStorage.getItem('accountId');
-    if (!accountId) throw new Error('No hay sesión activa');
-    try {
-      const response = await lastValueFrom( this.http.post(`${this.baseUrl}/transactions/${accountId}/transfer/${idDestino}`, { balance: monto }) );
+async realizarTransferencia(idDestino: string, monto: number, currency: 'ARS' | 'USD'): Promise<any> {
+    const accountId = localStorage.getItem('accountId');
+    if (!accountId) throw new Error('No hay sesión activa');
+    try {
+      const response = await lastValueFrom(
+        this.http.post(`${this.baseUrl}/transactions/transfer/${idDestino}`, {
+          balance: monto,
+          currency: currency
+        })
+      );
       this.loadUserData(true).subscribe(); // Refresca datos de usuario
       this.loadTransactions().catch(err => console.error("Error recargando tx después de transferir:", err)); // Refresca transacciones
       return response;

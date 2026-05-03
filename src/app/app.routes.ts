@@ -15,6 +15,7 @@ import { homeGuard } from './guards/home.guard';
 import { validateGuard } from './guards/validate.guard';
 import { resendGuard } from './guards/resend.guard';
 import { ResendComponent } from './pages/resend/resend';
+import { UsdAccountComponent } from './pages/usd-account/usd-account';
 
 export const routes: Routes = [
     {path: "", component:Home, canActivate: [homeGuard]},
@@ -30,6 +31,7 @@ export const routes: Routes = [
     {path: "reset-password", component:RecoverPasswordComponent}, 
     
     {path: "dashboard", component:DashboardComponent, canActivate: [authGuard]},
+    {path: "usd-account", component:UsdAccountComponent, canActivate: [authGuard]},
     {path: "admin", component:AdminComponent, canActivate: [authGuard, adminGuard]},
     {path: "404", component:Error404Component},
     {path: "**", redirectTo: "/404"}

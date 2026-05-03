@@ -9,4 +9,9 @@ export default interface Transaction {
   originId?: number;
   destinationId?: number;
   status?: 'COMPLETED' | 'FAILED';
+  // Campos para transacciones USD
+  currency?: 'ARS' | 'USD';
+  exchangeRate?: number;
+  amountInArs?: number;
+  originalCurrency?: 'ARS' | 'USD';
 }

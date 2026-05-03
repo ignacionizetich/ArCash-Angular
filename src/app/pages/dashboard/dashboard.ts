@@ -21,6 +21,7 @@ import { FavoriteService } from '../../services/favorite-service/favorite-servic
 import { DeviceService } from '../../services/device-service/device.service';
 import { CacheService } from '../../services/cache-service/cache.service';
 import { AdminService } from '../../services/admin-service/admin.service';
+import { AccountService } from '../../services/account-service/account.service';
 
 // Models
 import Transaction from '../../models/transaction';
@@ -32,7 +33,7 @@ import qrData from '../../models/qrData';
   standalone: true,
   imports: [CommonModule, FormsModule, QRCodeComponent, ZXingScannerModule],
   templateUrl: './dashboard.html',
-  styleUrl: './dashboard.css'
+  styleUrls: ['./dashboard.css', './currency-selector.css']
 })
 export class DashboardComponent implements OnInit, OnDestroy {
 
@@ -98,11 +99,18 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   // Estados del proceso de transferencia
   transferStep = 1;
+  
   destinatarioInput = '';
   montoTransfer: number | null = null;
   montoIngresar: number | null = null;
   cuentaDestinoData: any = null;
   transferCompletedData: any = null;
+
+  // Cuentas del usuario y selección de moneda
+  userAccounts: any[] = [];
+  transferCurrency: 'ARS' | 'USD' = 'ARS';
+  arsAccount: any = null;
+  usdAccount: any = null;
 
   // Estados de carga para botones
   isIngresandoDinero = false;
@@ -153,6 +161,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
     private deviceService: DeviceService,
     private cacheService: CacheService,
     private adminService: AdminService,
+    private accountService: AccountService,
     private cdr: ChangeDetectorRef, 
     @Inject(PLATFORM_ID) private platformId: Object
   ) {
@@ -236,7 +245,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     try {
       await Promise.all([
         this.transactionService.loadAllTransactions(),
-        this.favoriteService.loadFavoriteContacts()
+        this.favoriteService.loadFavoriteContacts(),
+        this.loadUserAccounts()
       ]);
     } catch (error) {
       console.error('Error inicializando services:', error);
@@ -380,6 +390,44 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.subscriptions.push(modalSub);
   }
 
+  // --- CARGA DE CUENTAS DEL USUARIO ---
+  private async loadUserAccounts(): Promise<void> {
+    try {
+      this.userAccounts = await this.accountService.getUserAccounts().toPromise() || [];
+      
+      // Separar cuentas por moneda
+      this.arsAccount = this.userAccounts.find(acc => acc.currency === 'ARS') || null;
+      this.usdAccount = this.userAccounts.find(acc => acc.currency === 'USD') || null;
+      
+      // Por defecto, seleccionar ARS si existe, sino USD
+      if (this.arsAccount) {
+        this.transferCurrency = 'ARS';
+      } else if (this.usdAccount) {
+        this.transferCurrency = 'USD';
+      }
+      
+      this.cdr.detectChanges();
+    } catch (error) {
+      console.error('Error cargando cuentas del usuario:', error);
+    }
+  }
+
+  // Método auxiliar para obtener saldo de la cuenta seleccionada
+  getSelectedAccountBalance(): number {
+    if (this.transferCurrency === 'USD' && this.usdAccount) {
+      return this.usdAccount.balance;
+    } else if (this.transferCurrency === 'ARS' && this.arsAccount) {
+      return this.arsAccount.balance;
+    }
+    return 0;
+  }
+
+  // Método para cambiar la moneda seleccionada
+  onCurrencyChange(currency: 'ARS' | 'USD'): void {
+    this.transferCurrency = currency;
+    this.cdr.detectChanges();
+  }
+
   private async loadDataInBackground(): Promise<void> {
     try {
       const promises = [];
@@ -514,14 +562,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const currentUser = this.dataService.getCurrentUserData();
-    if (!currentUser) {
-      this.utilService.showToast('Error: datos de usuario no disponibles', 'error');
-      return;
-    }
-
-    if (this.montoTransfer > currentUser.balance) {
-      this.utilService.showToast('Saldo insuficiente', 'error');
+    // Validar saldo de la cuenta seleccionada
+    const selectedAccountBalance = this.getSelectedAccountBalance();
+    if (this.montoTransfer > selectedAccountBalance) {
+      const currencyLabel = this.transferCurrency === 'USD' ? 'dólares' : 'pesos';
+      this.utilService.showToast(`Saldo insuficiente en tu cuenta de ${currencyLabel}`, 'error');
       return;
     }
 
@@ -559,8 +604,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
         this.cuentaDestinoData?.cvu
       );
       
-      await this.dataService.realizarTransferencia(accountIdForTransfer, this.montoTransfer);
+      // Pasar la moneda seleccionada al método de transferencia
+      await this.dataService.realizarTransferencia(accountIdForTransfer, this.montoTransfer, this.transferCurrency);
       this.dataService.loadUserData(true).subscribe();
+      // Recargar cuentas después de la transferencia
+      await this.loadUserAccounts();
 
       setTimeout(() => {
         this.isBalanceDecreasing = false;
@@ -687,6 +735,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.isTransfiriendo = false;
     this.isBalanceDecreasing = false;
     this.isScanning = false;
+    // Resetear a ARS por defecto si existe, sino USD
+    this.transferCurrency = this.arsAccount ? 'ARS' : 'USD';
     this.openModal('transfer');
   }
 
@@ -1434,5 +1484,11 @@ export class DashboardComponent implements OnInit, OnDestroy {
     } finally {
       this.isDeletingFavorite = false;
     }
+  }
+
+  // =================== NAVIGATION METHODS ===================
+  
+  goToUsdAccount(): void {
+    this.router.navigate(['/usd-account']);
   }
 }
